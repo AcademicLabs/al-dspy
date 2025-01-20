@@ -258,7 +258,7 @@ class SerperRM(Retrieve):
                     url = organic.get("link")
                     if url:
                         urls.append(url)
-            valid_url_to_snippets = self.website_helper.from_urls(urls)
+            valid_url_to_snippets = self.website_helper(urls)
         else:
             valid_url_to_snippets = {}
 
