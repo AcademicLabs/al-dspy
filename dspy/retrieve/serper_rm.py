@@ -130,7 +130,7 @@ class SerperRM(Retrieve):
     results: Optional[List[SerperSearchResult]] = None
     usage: int = 0
     website_helper: Optional[WebPageHelperBase] = None
-    website_downloader: Optional[object] = None
+    website_downloader: Optional[WebPageDownloader] = None
     query_params: Optional[SerperSearchParameters] = None
     serper_search_api_key: Optional[str] = None
     base_url: Optional[str] = None
@@ -139,7 +139,8 @@ class SerperRM(Retrieve):
         self,
         k=3,
         query_params: Optional[SerperSearchParameters] = None,
-        website_snippet_extractor=None,
+        website_helper=None,
+        web_page_downloader=None,
     ):
         """
         Args:
@@ -161,7 +162,8 @@ class SerperRM(Retrieve):
         """
         super().__init__(k=k)
         self.usage = 0
-        self.website_snippet_extractor = website_snippet_extractor
+        self.website_helper = website_helper
+        self.website_downloader = web_page_downloader
 
         if query_params is None:
             self.query_params = SerperSearchParameters(num=k, autocorrect=True, page=1)
@@ -248,7 +250,7 @@ class SerperRM(Retrieve):
 
         # If the website_snippet_extractor is provided, extract snippets from the result URLs.
         # The website_snippet_extractor is a WebsiteSnippetExtractor instance that will crawl the websites and extract snippets.
-        if self.website_snippet_extractor:
+        if self.website_helper:
             urls = []
             for result in self.results:
                 organic_results = result.get("organic", [])
@@ -256,7 +258,7 @@ class SerperRM(Retrieve):
                     url = organic.get("link")
                     if url:
                         urls.append(url)
-            valid_url_to_snippets = self.website_snippet_extractor.from_urls(urls)
+            valid_url_to_snippets = self.website_helper.from_urls(urls)
         else:
             valid_url_to_snippets = {}
 
