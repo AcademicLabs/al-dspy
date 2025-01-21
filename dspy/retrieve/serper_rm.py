@@ -5,7 +5,7 @@ from typing import List, Union
 
 import requests
 
-from al_commons.website_helpers.interface import WebPageHelperBase
+from al_commons.website_helpers.webpage_helper import HTMLHelper, URLContext
 from dspy import Retrieve
 
 from typing import List, Optional
@@ -54,25 +54,15 @@ class SerperSearchParameters(BaseModel):
     )
 
 
-class KnowledgeGraphAttributes(BaseModel):
-    Headquarters: Optional[str] = None
-    CEO: Optional[str] = None
-    Founded: Optional[str] = None
-    Sales: Optional[str] = None
-    Products: Optional[str] = None
-    Founders: Optional[str] = None
-    Subsidiaries: Optional[str] = None
-
-
 class KnowledgeGraph(BaseModel):
     title: str
     type: str
-    website: str
+    website: Optional[str] = None
     imageUrl: str
-    description: str
-    descriptionSource: str
-    descriptionLink: str
-    attributes: KnowledgeGraphAttributes
+    description: Optional[str] = None
+    descriptionSource: Optional[str] = None
+    descriptionLink: Optional[str] = None
+    attributes: Optional[dict] = None
 
 
 class Sitelink(BaseModel):
@@ -110,10 +100,10 @@ class RelatedSearch(BaseModel):
 
 class SerperSearchResult(BaseModel):
     searchParameters: SerperSearchParameters
-    knowledgeGraph: KnowledgeGraph
     organic: List[Organic]
-    peopleAlsoAsk: List[PeopleAlsoAsk]
+    peopleAlsoAsk: Optional[List[PeopleAlsoAsk]] = None
     relatedSearches: List[RelatedSearch]
+    knowledgeGraph: Optional[KnowledgeGraph] = None
 
 
 @dataclass
@@ -129,8 +119,7 @@ class SerperRM(Retrieve):
 
     results: Optional[List[SerperSearchResult]] = None
     usage: int = 0
-    website_helper: Optional[WebPageHelperBase] = None
-    website_downloader: Optional[WebPageDownloader] = None
+    website_helper: Optional[HTMLHelper] = None
     query_params: Optional[SerperSearchParameters] = None
     serper_search_api_key: Optional[str] = None
     base_url: Optional[str] = None
@@ -139,8 +128,7 @@ class SerperRM(Retrieve):
         self,
         k=3,
         query_params: Optional[SerperSearchParameters] = None,
-        website_helper=None,
-        web_page_downloader=None,
+        website_helper=Optional[HTMLHelper],
     ):
         """
         Args:
@@ -163,7 +151,6 @@ class SerperRM(Retrieve):
         super().__init__(k=k)
         self.usage = 0
         self.website_helper = website_helper
-        self.website_downloader = web_page_downloader
 
         if query_params is None:
             self.query_params = SerperSearchParameters(num=k, autocorrect=True, page=1)
@@ -188,7 +175,7 @@ class SerperRM(Retrieve):
         }
 
         response = requests.request(
-            "POST", search_url, headers=headers, json=query_params.model_dump_json()
+            "POST", search_url, headers=headers, data=query_params.model_dump_json()
         )
 
         if response.status_code != 200:
@@ -197,7 +184,7 @@ class SerperRM(Retrieve):
             )
 
         try:
-            search_result = SerperSearchResult(**response.json())
+            search_result = SerperSearchResult.model_validate_json(response.text)
         except Exception as e:
             raise RuntimeError(
                 f"Error occurred while parsing the serper response. Error is {e}"
@@ -212,8 +199,10 @@ class SerperRM(Retrieve):
 
     # noinspection PyMethodOverriding
     def forward(
-        self, query_or_queries: str | List[str], exclude_urls: List[str]
-    ) -> List[CollectedResult | []]:
+        self,
+        query_or_queries: str | List[str],
+        exclude_urls: Optional[List[str]] = None,
+    ) -> List[CollectedResult] | []:
         """
         Calls the API and searches for the provided query or queries.
 
@@ -248,17 +237,17 @@ class SerperRM(Retrieve):
         # Array of dictionaries that will be used by Storm to create the jsons
         collected_results: List[CollectedResult] = []
 
-        # If the website_snippet_extractor is provided, extract snippets from the result URLs.
-        # The website_snippet_extractor is a WebsiteSnippetExtractor instance that will crawl the websites and extract snippets.
+        # If the website_helper is provided, extract snippets from the result URLs.
+        # The website_helper will crawl the websites and extract snippets.
         if self.website_helper:
             urls = []
             for result in self.results:
-                organic_results = result.get("organic", [])
+                organic_results = result.organic
                 for organic in organic_results:
-                    url = organic.get("link")
+                    url = organic.link
                     if url:
                         urls.append(url)
-            valid_url_to_snippets = self.website_helper(urls)
+            valid_url_to_snippets: dict[str, URLContext] = self.website_helper(urls)
         else:
             valid_url_to_snippets = {}
 
@@ -272,9 +261,7 @@ class SerperRM(Retrieve):
                     url = organic.link
                     if url:
                         snippets.extend(
-                            valid_url_to_snippets.get(url.strip("'"), {}).get(
-                                "snippets", []
-                            )
+                            valid_url_to_snippets.get(url.strip("'"), {}).snippets
                         )
                 collected_results.append(
                     CollectedResult(
