@@ -58,7 +58,7 @@ class KnowledgeGraph(BaseModel):
     title: str
     type: str
     website: Optional[str] = None
-    imageUrl: str
+    imageUrl: Optional[str] = None
     description: Optional[str] = None
     descriptionSource: Optional[str] = None
     descriptionLink: Optional[str] = None
@@ -70,13 +70,6 @@ class Sitelink(BaseModel):
     link: str
 
 
-class OrganicAttributes(BaseModel):
-    Products: Optional[str] = None
-    Founders: Optional[str] = None
-    Founded: Optional[str] = None
-    Industry: Optional[str] = None
-
-
 class Organic(BaseModel):
     title: str
     link: str
@@ -84,14 +77,14 @@ class Organic(BaseModel):
     position: int
     sitelinks: Optional[List[Sitelink]] = None
     date: Optional[str] = None
-    attributes: Optional[OrganicAttributes] = None
+    attributes: Optional[dict] = None
 
 
 class PeopleAlsoAsk(BaseModel):
-    question: str
-    snippet: str
-    title: str
-    link: str
+    question: Optional[str] = None
+    snippet: Optional[str] = None
+    title: Optional[str] = None
+    link: Optional[str] = None
 
 
 class RelatedSearch(BaseModel):
@@ -102,7 +95,7 @@ class SerperSearchResult(BaseModel):
     searchParameters: SerperSearchParameters
     organic: List[Organic]
     peopleAlsoAsk: Optional[List[PeopleAlsoAsk]] = None
-    relatedSearches: List[RelatedSearch]
+    relatedSearches: Optional[List[RelatedSearch]] = None
     knowledgeGraph: Optional[KnowledgeGraph] = None
 
 
@@ -119,7 +112,6 @@ class SerperRM(Retrieve):
 
     results: Optional[List[SerperSearchResult]] = None
     usage: int = 0
-    website_helper: Optional[HTMLHelper] = None
     query_params: Optional[SerperSearchParameters] = None
     serper_search_api_key: Optional[str] = None
     base_url: Optional[str] = None
@@ -128,7 +120,6 @@ class SerperRM(Retrieve):
         self,
         k=3,
         query_params: Optional[SerperSearchParameters] = None,
-        website_helper=Optional[HTMLHelper],
     ):
         """
         Args:
@@ -150,7 +141,6 @@ class SerperRM(Retrieve):
         """
         super().__init__(k=k)
         self.usage = 0
-        self.website_helper = website_helper
 
         if query_params is None:
             self.query_params = SerperSearchParameters(num=k, autocorrect=True, page=1)
@@ -237,32 +227,12 @@ class SerperRM(Retrieve):
         # Array of dictionaries that will be used by Storm to create the jsons
         collected_results: List[CollectedResult] = []
 
-        # If the website_helper is provided, extract snippets from the result URLs.
-        # The website_helper will crawl the websites and extract snippets.
-        if self.website_helper:
-            urls = []
-            for result in self.results:
-                organic_results = result.organic
-                for organic in organic_results:
-                    url = organic.link
-                    if url:
-                        urls.append(url)
-            valid_url_to_snippets: dict[str, URLContext] = self.website_helper(urls)
-        else:
-            valid_url_to_snippets = {}
-
         for result in self.results:
             # An array of dictionaries that contains the snippets, title of the document and url that will be used.
             organic_results = result.organic
             knowledge_graph = result.knowledgeGraph
             for organic in organic_results:
                 snippets = [organic.snippet]
-                if valid_url_to_snippets:
-                    url = organic.link
-                    if url:
-                        snippets.extend(
-                            valid_url_to_snippets.get(url.strip("'"), {}).snippets
-                        )
                 collected_results.append(
                     CollectedResult(
                         snippets=snippets,
@@ -275,5 +245,4 @@ class SerperRM(Retrieve):
                         ),
                     )
                 )
-
         return collected_results
