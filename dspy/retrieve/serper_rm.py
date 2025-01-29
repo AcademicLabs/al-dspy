@@ -10,6 +10,8 @@ from dspy import Retrieve
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
+from dspy.retrieve.common import CollectedResult
+
 
 class SearchType(str, Enum):
     search = "search"
@@ -96,14 +98,6 @@ class SerperSearchResult(BaseModel):
     peopleAlsoAsk: Optional[List[PeopleAlsoAsk]] = None
     relatedSearches: Optional[List[RelatedSearch]] = None
     knowledgeGraph: Optional[KnowledgeGraph] = None
-
-
-@dataclass
-class CollectedResult:
-    snippets: List[str]
-    title: str
-    url: str
-    description: str
 
 
 class SerperRM(Retrieve):
@@ -223,7 +217,6 @@ class SerperRM(Retrieve):
             result = self._serper_runner(query_params)
             self.results.append(result)
 
-        # Array of dictionaries that will be used by Storm to create the jsons
         collected_results: List[CollectedResult] = []
 
         for result in self.results:
